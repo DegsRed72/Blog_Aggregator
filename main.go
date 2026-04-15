@@ -2,14 +2,44 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/DegsRed72/gator/internal/config"
 )
 
+type state struct {
+	config *config.Config
+}
+
+type command struct {
+	name string
+	args []string
+}
+
+type commands struct {
+	list map[string]func(*state, command) error
+}
+
 func main() {
 	cfg := config.Read()
-	cfg.SetUser("Evan")
-	cfg = config.Read()
+	st := state{config: &cfg}
+	cmds := commands{list: make(map[string]func(*state, command) error)}
+	cmds.register("login", handlerLogin)
+
+	args := os.Args
+	if len(args) < 2 {
+		log.Fatal("Not enough arguments")
+	}
+	cmdArgs := []string{}
+	if len(args) > 2 {
+		cmdArgs = append(cmdArgs, args[2])
+	}
+	cmd := command{name: args[1], args: cmdArgs}
+	err := cmds.run(&st, cmd)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println(cfg)
 }
