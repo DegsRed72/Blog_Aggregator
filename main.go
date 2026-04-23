@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"os"
 
@@ -35,6 +34,7 @@ func main() {
 	cmds.register("users", handlerGetUsers)
 	cmds.register("agg", handlerAgg)
 	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("feeds", handlerFeeds)
 	dbURL := st.config.DBUrl
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -59,5 +59,4 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(cfg)
 }
