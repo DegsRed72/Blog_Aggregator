@@ -33,6 +33,8 @@ func main() {
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
+	cmds.register("agg", handlerAgg)
+	cmds.register("addfeed", handlerAddFeed)
 	dbURL := st.config.DBUrl
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -47,7 +49,9 @@ func main() {
 	}
 	cmdArgs := []string{}
 	if len(args) > 2 {
-		cmdArgs = append(cmdArgs, args[2])
+		for i := 2; i < len(args); i++ {
+			cmdArgs = append(cmdArgs, args[i])
+		}
 	}
 	cmd := command{name: args[1], args: cmdArgs}
 	err = cmds.run(&st, cmd)

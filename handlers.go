@@ -70,3 +70,38 @@ func handlerGetUsers(s *state, cmd command) error {
 
 	return nil
 }
+
+func handlerAgg(s *state, cmd command) error {
+	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%v", feed)
+	return nil
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.args) != 2 {
+		log.Fatal("addfeed expects exactly two arguments")
+	}
+	name := cmd.args[0]
+	url := cmd.args[1]
+	dbUser, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
+	if err != nil {
+		return errors.New("User not found")
+	}
+	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      name,
+		Url:       url,
+		UserID:    dbUser.ID,
+	})
+	fmt.Printf("%v", feed)
+	return nil
+}
+
+func handlerFeeds(s *state, cmd command) error {
+	return nil
+}
