@@ -11,6 +11,16 @@ import (
 	"github.com/google/uuid"
 )
 
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		dbUser, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
+		if err != nil {
+			return errors.New("User not found")
+		}
+		return handler(s, cmd, dbUser)
+	}
+}
+
 func handlerLogin(s *state, cmd command) error {
 	if len(cmd.args) != 1 {
 		return errors.New("login expects only one argument")
@@ -80,16 +90,12 @@ func handlerAgg(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, dbUser database.User) error {
 	if len(cmd.args) != 2 {
 		log.Fatal("addfeed expects exactly two arguments")
 	}
 	name := cmd.args[0]
 	url := cmd.args[1]
-	dbUser, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
-	if err != nil {
-		return errors.New("User not found")
-	}
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
@@ -98,6 +104,19 @@ func handlerAddFeed(s *state, cmd command) error {
 		Url:       url,
 		UserID:    dbUser.ID,
 	})
+	if err != nil {
+		return err
+	}
+	_, err = s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    dbUser.ID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		return err
+	}
 	fmt.Printf("%v", feed)
 	return nil
 }
@@ -115,6 +134,41 @@ func handlerFeeds(s *state, cmd command) error {
 			return err
 		}
 		fmt.Println(dbUser.Name)
+	}
+	return nil
+}
+
+func handlerFollow(s *state, cmd command, dbUser database.User) error {
+	if len(cmd.args) != 1 {
+		log.Fatal("follow command expects exactly one argument")
+	}
+	url := cmd.args[0]
+	dbFeed, err := s.db.GetFeedURL(context.Background(), url)
+	if err != nil {
+		return err
+	}
+	dbFeedFollow, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    dbUser.ID,
+		FeedID:    dbFeed.ID,
+	})
+	fmt.Printf("Feed Name: %s, User Name: %s", dbFeedFollow[0].FeedName, dbFeedFollow[0].UserName)
+	return nil
+}
+
+func handlerFollowing(s *state, cmd command, dbUser database.User) error {
+	dbFeedFollows, err := s.db.GetFeedFollowsForUser(context.Background(), dbUser.ID)
+	if err != nil {
+		return err
+	}
+	for _, feedFollow := range dbFeedFollows {
+		feed, err := s.db.GetFeedID(context.Background(), feedFollow.FeedID)
+		if err != nil {
+			return err
+		}
+		fmt.Println(feed.Name)
 	}
 	return nil
 }
