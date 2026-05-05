@@ -82,11 +82,35 @@ func handlerGetUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if len(cmd.args) != 1 {
+		return errors.New("agg command expects one argument")
+	}
+	time_between_reqs := cmd.args[0]
+	timeBetweenRequests, err := time.ParseDuration(time_between_reqs)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%v", feed)
+	ticker := time.NewTicker(timeBetweenRequests)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
+}
+
+func scrapeFeeds(s *state) error {
+	dbFeed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return err
+	}
+	err = s.db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{ID: dbFeed.ID})
+	if err != nil {
+		return err
+	}
+	RSSFeed, err := fetchFeed(context.Background(), dbFeed.Url)
+	if err != nil {
+		return err
+	}
+	fmt.Println(RSSFeed.Channel.Title)
+
 	return nil
 }
 
@@ -170,5 +194,23 @@ func handlerFollowing(s *state, cmd command, dbUser database.User) error {
 		}
 		fmt.Println(feed.Name)
 	}
+	return nil
+}
+
+func handlerUnfollow(s *state, cmd command, dbUser database.User) error {
+	if len(cmd.args) != 1 {
+		return errors.New("unfollow command expects one agrument")
+	}
+	feed_url := cmd.args[0]
+	dbFeed, err := s.db.GetFeedURL(context.Background(), feed_url)
+	if err != nil {
+		return err
+	}
+	err = s.db.DeleteFeedFollow(context.Background(), database.DeleteFeedFollowParams{UserID: dbFeed.UserID, FeedID: dbFeed.ID})
+	if err != nil {
+		return err
+	}
+	fmt.Println("Unfollow successful")
+
 	return nil
 }
