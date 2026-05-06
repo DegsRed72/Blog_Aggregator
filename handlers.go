@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/DegsRed72/gator/internal/database"
@@ -109,7 +112,32 @@ func scrapeFeeds(s *state) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(RSSFeed.Channel.Title)
+	for _, item := range RSSFeed.Channel.Item {
+		publishedAt := sql.NullTime{}
+		if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+			publishedAt = sql.NullTime{
+				Time:  t,
+				Valid: true,
+			}
+		}
+		err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:    uuid.New(),
+			Title: item.Title,
+			Url:   item.Link,
+			Description: sql.NullString{
+				String: item.Description,
+				Valid:  true,
+			},
+			PublishedAt: publishedAt.Time,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				continue
+			}
+			log.Printf("Couldn't create post: %v", err)
+			continue
+		}
+	}
 
 	return nil
 }
@@ -211,6 +239,36 @@ func handlerUnfollow(s *state, cmd command, dbUser database.User) error {
 		return err
 	}
 	fmt.Println("Unfollow successful")
+
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2
+	if len(cmd.args) == 1 {
+		if specifiedLimit, err := strconv.Atoi(cmd.args[0]); err == nil {
+			limit = specifiedLimit
+		} else {
+			return fmt.Errorf("invalid limit: %w", err)
+		}
+	}
+
+	posts, err := s.db.GetPostsUser(context.Background(), database.GetPostsUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+	if err != nil {
+		return fmt.Errorf("couldn't get posts for user: %w", err)
+	}
+
+	fmt.Printf("Found %d posts for user %s:\n", len(posts), user.Name)
+	for _, post := range posts {
+		fmt.Printf("%s\n", post.PublishedAt.Format("Mon Jan 2"))
+		fmt.Printf("--- %s ---\n", post.Title)
+		fmt.Printf("    %v\n", post.Description.String)
+		fmt.Printf("Link: %s\n", post.Url)
+		fmt.Println("=====================================")
+	}
 
 	return nil
 }
